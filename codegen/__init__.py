@@ -2,7 +2,17 @@ import datetime
 from math import floor
 import autopep8
 import re
+from typing import NewType
+from utils import stringify
 
+
+# The String type is used to differentiate between regular strings and strings that represent code
+class String:
+    def __init__(self, string):
+        self.value = string
+
+    def __str__(self):
+        return self.value
 
 class Method:
     def __init__(self, name: str, arguments: list[str]):
@@ -14,38 +24,47 @@ class Method:
         if len(self.arguments) != 0:
             args = ','.join(self.arguments)
             args = ',' + args
-        return f"def {self.name}(self{args}):\n\t\t# write method body\n\t\tpass"
+        return f"\n\tdef {self.name}(self{args}):\n\t\t# write method body\n\t\tpass"
 
 
 class Class:
-    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False):
+    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, level=0):
         self.name = name.capitalize()
         self.base_class = base_class
         self.add_init_method = add_init_method
         self.methods = []
         self.class_variables = {}
+        self.subclasses = []
+        self.level = level
 
     def __str__(self):
         class_def = ""
         init = ""
         methods = ""
         class_vars = ""
+        subclasses = ""
 
+        # get tabs for indenting
+        tabs = '\t' * self.level
         if self.base_class is None:
-            class_def = f"\nclass {self.name}:"
+
+            class_def = f"\n\n{tabs}class {self.name}:"
         else:
-            class_def = f"\nclass {self.name}({self.base_class}):"
+            class_def = f"\n\n{tabs}class {self.name}({self.base_class}):"
 
         if self.add_init_method is True:
-            init = f"\n\tdef __init__(self):\n\t\t# initialise class here\n\t\tpass"
+            init = f"\n\t{tabs}def __init__(self):\n\t\t{tabs}# initialise class here\n\t\tpass"
 
         for method in self.methods:
-            methods = methods + f"\n\t{str(method)}"
+            methods = methods + f"\n\t{tabs}{str(method)}"
 
         for var in self.class_variables:
-            class_vars = class_vars + "\n" + var + " = " + self.class_variables[var]
+            class_vars = class_vars + "\n\t" + tabs + var + " = " + self.class_variables[var]
 
-        return f"{class_def}{class_vars}{init}{methods}"
+        for subclass in self.subclasses:
+            subclasses = "\t" + str(subclass)
+
+        return f"{class_def}{subclasses}{class_vars}{init}{methods}\n"
 
     def add_method(self, method_name: str, arguments_names: list[str]):
         self.methods.append(Method(name=method_name, arguments=arguments_names))
@@ -54,21 +73,26 @@ class Class:
         if isinstance(variable_value, str):
             value = "'" + variable_value + "'"
         else:
-            value = variable_value
+            value = str(variable_value)
         self.class_variables[variable_name] = value
+
+    def add_sub_class(self, _class):
+        # increase the subclass indent by 1 greater than the parent class' indent
+        _class.level = self.level + 1
+        self.subclasses.append(_class)
 
 
 class Variable:
-    def __init__(self, name, _value):
+    def __init__(self, name, value):
         self.name = name
-        self.value = _value
+        self.value = value
 
     def __str__(self):
         if isinstance(self.value, str):
             value = "'" + self.value + "'"
         else:
             value = self.value
-        return "\n"+self.name + " = " + value
+        return "\n" + self.name + " = " + value
 
     @property
     def value(self):
@@ -79,14 +103,55 @@ class Variable:
         self._value = value
 
 
-# import modes
-# 1 - import package
-# 2 - from package import object
-# 3 - from package import object as alias
-# 4 - import package as alias
+class ClassInstance:
+    def __init__(self, class_name, *args, **kwargs):
+        """
+        Create a ClassInstance object
+        Args:
+            class_name: the name of the class
+            *args: the args passed to the class' init method
+            **kwargs: the kwargs passed to the class' init method
+        """
+        self.class_name = class_name
+        self.args = args
+        self.kwargs = kwargs
+        print(args)
+        print(kwargs)
+
+    def __str__(self):
+        args = ""
+        kwargs = ", "
+
+        for arg in self.args:
+            print(type(arg))
+            if isinstance(arg, String):
+                arg = stringify(arg)
+            args = args + f"{arg}, "
+        args = args[:-2]
+
+
+        for kwarg in self.kwargs:
+            val = self.kwargs[kwarg]
+            if isinstance(val, String):
+                val = stringify(val)
+            kwargs = kwargs + f"{kwarg}={val}, "
+
+        kwargs = kwargs[:-2]
+
+        if kwargs == ', ':
+            args = args[:-1]
+
+        return f"{self.class_name}({args}{kwargs})"
+
+    def add_kwarg(self, key, value):
+        self.kwargs[key] = value
 
 
 class CodegenTool:
+    """
+    This is a little internal tool for programmatic writing of python code
+    """
+
     def __init__(self, output_file: str = None, override: bool = True):
         # create a new codegen tool
         mode = 'a+'
@@ -107,6 +172,18 @@ class CodegenTool:
             self.format_file()
 
     def import_package(self, mode=1, **kwargs):
+        """
+        Imports a package in the codegen output file
+
+        Args:
+            mode: import style
+                1 - import package
+                2 - from package import object
+                3 - from package import object as alias
+                4 - import package as alias
+            **kwargs: package, object. keyword arguments
+
+        """
         if mode == 1:
             statement = f"import {kwargs['package']}"
         elif mode == 2:
@@ -137,12 +214,12 @@ class CodegenTool:
 
 
 if __name__ == '__main__':
-    codegen = CodegenTool()
-    var = Variable(name='a', _value='23')
-    c = Class(name='NewException', base_class='Exception', add_init_method=True)
-    c.add_method(method_name='get_message', arguments_names=[])
-    c.add_method(method_name='another_method', arguments_names=['message'])
-    codegen.import_package(mode=2, package='datetime', object='datetime')
-    codegen.write_variable(var)
-    codegen.write_class(c)
-
+    # codegen = CodegenTool('test.py')
+    # c = Class(name='NewException', base_class='Exception', add_init_method=True)
+    # c.add_method(method_name='get_message', arguments_names=[])
+    # c.add_method(method_name='another_method', arguments_names=['message'])
+    # c.add_class_variable('hey', 2)
+    # codegen.import_package(mode=2, package='datetime', object='datetime')
+    # codegen.write_class(c)
+    a = ClassInstance('name', String('arg1'), String('arg2'), kwarg1='kwarg10', required='True')
+    print(str(a))

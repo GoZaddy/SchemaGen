@@ -174,7 +174,7 @@ implementsInterfaces: 'implements' '&'? namedType
     ;
 
 
-fieldsDefinition: '{' fieldDefinition+ '}';
+fieldsDefinition: '{' fields+=fieldDefinition+ '}';
 fieldDefinition: description? name  argumentsDefinition? ':' type_  directives? ;
 
 //https://spec.graphql.org/June2018/#sec-Field-Arguments
