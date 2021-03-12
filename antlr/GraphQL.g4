@@ -207,7 +207,7 @@ unionTypeExtension : 'extend' 'union' name directives? unionMemberTypes
 
 //https://spec.graphql.org/June2018/#sec-Enums
 enumTypeDefinition:  description? 'enum' name directives? enumValuesDefinition?;
-enumValuesDefinition: '{' enumValueDefinition+  '}';
+enumValuesDefinition: '{' fields+=enumValueDefinition+  '}';
 enumValueDefinition: description? enumValue  directives?;
 
 //https://spec.graphql.org/June2018/#sec-Enum-Extensions

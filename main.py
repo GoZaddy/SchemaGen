@@ -51,12 +51,13 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 # get implemented interfaces
                 if is_object_type:
-                    interfaces = child.implementsInterfaces().getText().split(sep='implements')
-                    interfaces = interfaces[1].split(sep='&')
-                    interface_string = ''
-                    for i in interfaces:
-                        interface_string = interface_string+i+','
-                    meta_class.add_class_variable('interfaces', f"({interface_string})")
+                    if child.implementsInterfaces() is not None:
+                        interfaces = child.implementsInterfaces().getText().split(sep='implements')
+                        interfaces = interfaces[1].split(sep='&')
+                        interface_string = ''
+                        for i in interfaces:
+                            interface_string = interface_string+i+','
+                        meta_class.add_class_variable('interfaces', f"({interface_string})")
 
                 # get fields of the ObjectType
                 fields = child.fieldsDefinition().fields
@@ -99,9 +100,41 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 self.codegen.write_class(type_class)
 
+            elif isinstance(child, GraphQLParser.EnumTypeDefinitionContext):
+                enum_class = Class(name=child.name().getText(), base_class="Enum", add_init_method=False)
+                meta_class = Class(name='meta')
+
+                # get enum description
+                desc = child.description()
+                if desc:
+                    meta_class.add_class_variable('description', String(strip_string_quotes(desc.getText())))
+
+                # get fields of the Enum
+                fields = child.enumValuesDefinition().fields
+                for field in fields:
+                    # get field name and type
+                    enum_value = field.enumValue().getText()
+
+                    # get enum description
+                    field_desc = field.description()
+                    if field_desc is not None:
+                        field_desc = String(strip_string_quotes(field_desc.getText()))
+                    else:
+                        field_desc = ''
+
+                    if field_desc != '':
+                        # do something
+                        pass
+
+                    enum_class.add_class_variable(enum_value, String(enum_value))
+
+                if len(meta_class.class_variables) != 0:
+                    enum_class.add_sub_class(meta_class)
+
+                self.codegen.write_class(enum_class)
 
             else:
-                pass
+                print(type(child))
 
     def __call__(self):
         self.codegen.import_package(package=graphene, mode=2, object='*')
