@@ -14,6 +14,7 @@ class String:
     def __str__(self):
         return self.value
 
+
 class Method:
     def __init__(self, name: str, arguments: list[str]):
         self.name = name
@@ -70,8 +71,8 @@ class Class:
         self.methods.append(Method(name=method_name, arguments=arguments_names))
 
     def add_class_variable(self, variable_name, variable_value):
-        if isinstance(variable_value, str):
-            value = "'" + variable_value + "'"
+        if isinstance(variable_value, String):
+            value = stringify(variable_value)
         else:
             value = str(variable_value)
         self.class_variables[variable_name] = value
@@ -115,20 +116,16 @@ class ClassInstance:
         self.class_name = class_name
         self.args = args
         self.kwargs = kwargs
-        print(args)
-        print(kwargs)
 
     def __str__(self):
         args = ""
         kwargs = ", "
 
         for arg in self.args:
-            print(type(arg))
             if isinstance(arg, String):
                 arg = stringify(arg)
             args = args + f"{arg}, "
         args = args[:-2]
-
 
         for kwarg in self.kwargs:
             val = self.kwargs[kwarg]
