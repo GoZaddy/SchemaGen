@@ -2,8 +2,23 @@ import datetime
 from math import floor
 import autopep8
 import re
-from typing import NewType
+from typing import NewType, List
 from utils import stringify
+
+
+class Block:
+    """
+    Block is an 'interface' that represents a block of code. It is mostly used for indenting
+    """
+
+    def __init__(self, indent_level):
+        self.indent_level = indent_level
+
+    def set_indent_level(self, indent_level: int):
+        self.indent_level = indent_level
+
+    def get_indent_level(self) -> int:
+        return self.indent_level
 
 
 # The String type is used to differentiate between regular strings and strings that represent code
@@ -12,13 +27,25 @@ class String:
         self.value = string
 
     def __str__(self):
-        return self.value
+        return stringify(self.value)
 
 
-class Method:
-    def __init__(self, name: str, arguments: list[str]):
+# TODO: finish this
+# TODO: add an add_directive method that adds directives to functions. Make it very simple sha. Directive doesn't need to take any arguments...for now
+class Function(Block):
+    def __init__(self):
+        pass
+
+    def add_directive(self):
+        pass
+
+
+# TODO: make sure everything works well after sha
+class Method(Function):
+    def __init__(self, name: str, arguments: list[str], indent_level=0):
         self.name = name
         self.arguments = arguments
+        super().__init__(indent_level)
 
     def __str__(self):
         args = ""
@@ -28,15 +55,15 @@ class Method:
         return f"\n\tdef {self.name}(self{args}):\n\t\t# write method body\n\t\tpass"
 
 
-class Class:
-    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, level=0):
+class Class(Block):
+    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, indent_level=0):
         self.name = name.capitalize()
         self.base_class = base_class
         self.add_init_method = add_init_method
         self.methods = []
         self.class_variables = {}
         self.subclasses = []
-        self.level = level
+        super().__init__(indent_level)
 
     def __str__(self):
         class_def = ""
@@ -71,15 +98,12 @@ class Class:
         self.methods.append(Method(name=method_name, arguments=arguments_names))
 
     def add_class_variable(self, variable_name, variable_value):
-        if isinstance(variable_value, String):
-            value = stringify(variable_value)
-        else:
-            value = str(variable_value)
+        value = str(variable_value)
         self.class_variables[variable_name] = value
 
     def add_sub_class(self, _class):
         # increase the subclass indent by 1 greater than the parent class' indent
-        _class.level = self.level + 1
+        _class.set_indent_level(self.get_indent_level() + 1)
         self.subclasses.append(_class)
 
 
@@ -123,14 +147,14 @@ class ClassInstance:
 
         for arg in self.args:
             if isinstance(arg, String):
-                arg = stringify(arg)
+                arg = str(arg)
             args = args + f"{arg}, "
         args = args[:-2]
 
         for kwarg in self.kwargs:
             val = self.kwargs[kwarg]
             if isinstance(val, String):
-                val = stringify(val)
+                val = str(val)
             kwargs = kwargs + f"{kwarg}={val}, "
 
         kwargs = kwargs[:-2]
@@ -142,6 +166,81 @@ class ClassInstance:
 
     def add_kwarg(self, key, value):
         self.kwargs[key] = value
+
+
+class Expr:
+    """
+    This simple class represents a python expression e.g: a < b
+    """
+
+    def __init__(self, expression: str):
+        self.expression = expression
+
+    def __str__(self):
+        return self.expression
+
+
+class If(Block):
+    def __init__(self, expr: Expr, action: List[Expr], if_type: str = 'if', indent_level=0):
+        self.expr = expr
+        self.action = action
+        self.type = if_type
+        super().__init__(indent_level)
+
+    def __str__(self):
+        actions = ''
+        tabs = self.get_indent_level() * '\t'
+        for action in self.action:
+            actions = actions + tabs + '\t' + str(action) + '\n'
+        return f"\n{tabs}{self.type} {str(self.expr)}:\n{actions}"
+
+
+class IfElse(Block):
+    def __init__(self, if_: If, else_action: List[Expr], indent_level=0, elifs: List[If] = None):
+        if elifs is None:
+            elifs = []
+        self.if_ = if_
+        self.else_action = else_action
+        self.elifs = elifs
+        super().__init__(indent_level)
+
+    def __str__(self):
+        tabs = self.get_indent_level() * '\t'
+        if_action = ''
+        for expr in self.if_.action:
+            if_action = if_action + tabs + '\t' + str(expr) + '\n'
+        if not if_action:
+            if_action = 'pass'
+
+        else_action = ''
+        for expr in self.else_action:
+            else_action = tabs + '\t' + str(expr) + '\n'
+        if not else_action:
+            else_action = 'pass'
+
+        elifs = '\n'
+
+        for elif_ in self.elifs:
+            elifs = elifs + str(elif_) + '\n'
+
+        if elifs == '\n':
+            elifs = ''
+
+        return f"\n{tabs}if {str(self.if_.expr)}:\n{if_action.rstrip()}{elifs}{tabs}else:\n{else_action}"
+
+    def add_elif(self, elif_: If):
+        """
+        This adds an elif statement to the If Else block. You can add the elif statement manually during
+        initialisation of the IfElse object but you would have to set indent levels correctly yourself but this
+        method does that for you.
+
+        Args:
+            elif_: the elif statement to add
+
+        """
+        elif_.type = 'elif'
+        elif_.set_indent_level(self.indent_level)
+        self.elifs.append(elif_)
 
 
 class CodegenTool:
@@ -206,17 +305,39 @@ class CodegenTool:
             f.write(str(variable))
             self.format_file()
 
+    def write_if_else(self, if_else: IfElse):
+        with open(self.output_file, 'a+') as f:
+            f.write(str(if_else))
+            self.format_file()
+
     def format_file(self):
         autopep8.fix_file(self.output_file)
 
 
 if __name__ == '__main__':
-    # codegen = CodegenTool('test.py')
+
     # c = Class(name='NewException', base_class='Exception', add_init_method=True)
     # c.add_method(method_name='get_message', arguments_names=[])
     # c.add_method(method_name='another_method', arguments_names=['message'])
     # c.add_class_variable('hey', 2)
     # codegen.import_package(mode=2, package='datetime', object='datetime')
     # codegen.write_class(c)
-    a = ClassInstance('name', String('arg1'), String('arg2'), kwarg1='kwarg10', required='True')
-    print(str(a))
+    # a = ClassInstance('name', String('arg1'), String('arg2'), kwarg1='kwarg10', required='True')
+    codegen = CodegenTool('test.py')
+    ie = IfElse(
+        if_=If(
+            expr=Expr(f"{String('a')} != {String('b')}"),
+            action=[Expr("print('true')"), Expr("print('true')"), Expr("print('true')")]
+        ),
+        else_action=[Expr("print('else')")],
+    )
+
+    ie.add_elif(
+        If(
+            expr=Expr(f"{String('a')} == {String('b')}"),
+            action=[Expr("print('false')"),Expr("print('false')"),Expr("print('false')")],
+            if_type='elif'
+        )
+    )
+
+    codegen.write_if_else(ie)

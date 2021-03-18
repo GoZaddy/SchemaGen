@@ -73,6 +73,12 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     else:
                         field_desc = ''
 
+                    print(var_value.lower())
+                    print(type_class.name.lower())
+                    if is_interface:
+                        if var_value.lower() == type_class.name.lower():
+                            var_value = 'lambda: '+var_value
+
                     # if field is a required field
                     if var_value[len(var_value) - 1] == '!':
                         field_code = ClassInstance('Field', var_value[:-1], required=True)
@@ -82,6 +88,11 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     # if field is a list type
                     if field.type_().listType() is not None:
                         list_type_named_type = field.type_().listType().type_().getText()
+
+                        if is_interface:
+                            if list_type_named_type.lower() == type_class.name.lower():
+                                list_type_named_type = 'lambda: ' + list_type_named_type
+
                         if list_type_named_type[len(list_type_named_type) - 1] == '!':
                             field_code = ClassInstance('List', str(ClassInstance('NonNull', list_type_named_type[:-1])))
                         else:
