@@ -1,6 +1,6 @@
 from antlr4 import *
 from antlr import GraphQLParser, GraphQLLexer, GraphQLListener
-from codegen import CodegenTool, Class, String, ClassInstance
+from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr
 import re
 from math import floor
 from datetime import datetime
@@ -9,11 +9,6 @@ from utils import strip_string_quotes
 GraphQLParser = GraphQLParser.GraphQLParser
 
 graphene = 'graphene'
-
-sdl_type_to_graphene_type = {
-    'ID': '',
-    'String': ''
-}
 
 
 class SDLParser(GraphQLListener.GraphQLListener):
@@ -34,7 +29,8 @@ class SDLParser(GraphQLListener.GraphQLListener):
         for child in ctx.children:
 
             # type definition is for an Object Type Definition
-            if isinstance(child, GraphQLParser.ObjectTypeDefinitionContext) or isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext):
+            if isinstance(child, GraphQLParser.ObjectTypeDefinitionContext) or isinstance(child,
+                                                                                          GraphQLParser.InterfaceTypeDefinitionContext):
                 is_object_type = isinstance(child, GraphQLParser.ObjectTypeDefinitionContext)
                 is_interface = isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext)
 
@@ -56,7 +52,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
                         interfaces = interfaces[1].split(sep='&')
                         interface_string = ''
                         for i in interfaces:
-                            interface_string = interface_string+i+','
+                            interface_string = interface_string + i + ','
                         meta_class.add_class_variable('interfaces', f"({interface_string})")
 
                 # get fields of the ObjectType
@@ -77,7 +73,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     print(type_class.name.lower())
                     if is_interface:
                         if var_value.lower() == type_class.name.lower():
-                            var_value = 'lambda: '+var_value
+                            var_value = 'lambda: ' + var_value
 
                     # if field is a required field
                     if var_value[len(var_value) - 1] == '!':
@@ -122,22 +118,48 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 # get fields of the Enum
                 fields = child.enumValuesDefinition().fields
+                fields_and_desc = {}
                 for field in fields:
                     # get field name and type
                     enum_value = field.enumValue().getText()
 
                     # get enum description
                     field_desc = field.description()
+                    print(field_desc)
                     if field_desc is not None:
+                        print(field.description().getText())
                         field_desc = String(strip_string_quotes(field_desc.getText()))
                     else:
                         field_desc = ''
 
                     if field_desc != '':
                         # do something
-                        pass
+                        fields_and_desc[enum_value] = field_desc
 
+                    # add enums as class variables to main class
                     enum_class.add_class_variable(enum_value, String(enum_value))
+
+                # add enums description
+                method = Method(
+                    name='description',
+                    decorators=['@property'],
+                    arguments=[]
+                )
+
+                if_else = IfElse(
+                    indent_level=method.get_indent_level() + 1,
+                    else_action=[Expr("pass")],
+                )
+
+                for i in fields_and_desc:
+                    if_else.add_elif(If(
+                        expr=Expr(f"self == {enum_class.name}.{i}"),
+                        action=[Expr(f"return {fields_and_desc[i]}")]
+                    ))
+
+                method.set_body([if_else])
+
+                enum_class.add_method(method=method)
 
                 if len(meta_class.class_variables) != 0:
                     enum_class.add_sub_class(meta_class)

@@ -4,6 +4,7 @@ import autopep8
 import re
 from typing import NewType, List
 from utils import stringify
+from errors import CodegenError
 
 
 class Block:
@@ -20,6 +21,12 @@ class Block:
     def get_indent_level(self) -> int:
         return self.indent_level
 
+    def increment_indent_level(self):
+        self.indent_level = self.indent_level + 1
+
+    def __str__(self):
+        pass
+
 
 # The String type is used to differentiate between regular strings and strings that represent code
 class String:
@@ -30,29 +37,73 @@ class String:
         return stringify(self.value)
 
 
-# TODO: finish this
-# TODO: add an add_directive method that adds directives to functions. Make it very simple sha. Directive doesn't need to take any arguments...for now
+class Expr(Block):
+    """
+    This simple class represents a python expression e.g: a < b
+    """
+
+    def __init__(self, expression: str, indent_level=0):
+        self.expression = expression
+        super().__init__(indent_level)
+
+    def __str__(self):
+        tabs = '\t' * self.indent_level
+        return tabs + self.expression
+
+
 class Function(Block):
-    def __init__(self):
-        pass
-
-    def add_directive(self):
-        pass
-
-
-# TODO: make sure everything works well after sha
-class Method(Function):
-    def __init__(self, name: str, arguments: list[str], indent_level=0):
+    def __init__(self, name: str, arguments: list[str], body: List[Block] = None, indent_level=0,
+                 decorators: List[str] = None):
+        """
+        This is used to initialise a Function object
+        Args:
+            name: name of the function
+            arguments: arguments that the function take
+            indent_level: indent level of the function
+            decorators: decorators applied to the function. Each decorator should be in the form '@<decorator_name>'
+        """
         self.name = name
         self.arguments = arguments
+        if decorators is None:
+            decorators = []
+        self.decorators = decorators
+        self.body = body
         super().__init__(indent_level)
 
     def __str__(self):
         args = ""
         if len(self.arguments) != 0:
             args = ','.join(self.arguments)
-            args = ',' + args
-        return f"\n\tdef {self.name}(self{args}):\n\t\t# write method body\n\t\tpass"
+        tabs = '\t' * self.get_indent_level()
+        decorators = ''
+        for i in self.decorators:
+            decorators = decorators + f"\n{tabs}{i}"
+
+        if self.body is None:
+            return f"{decorators}\n{tabs}def {self.name}({args}):\n{tabs}\t# write method body\n{tabs}\tpass"
+        else:
+            body_lines = ''
+            for block in self.body:
+                block.set_indent_level(self.get_indent_level() + 1)
+                body_lines = body_lines + str(block)
+
+            return f"{decorators}\n{tabs}def {self.name}({args}):{body_lines}"
+
+    def add_decorator(self, decorator: str):
+        if decorator[0] != '@':
+            raise CodegenError('Invalid decorator value. Decorator should start with @')
+        else:
+            self.decorators.append(decorator)
+
+    def set_body(self, body: List[Block]):
+        self.body = body
+
+
+# TODO: make sure everything works well after sha
+class Method(Function):
+    def __init__(self, name: str, arguments: list[str], indent_level=1, decorators: List[str] = None):
+        arguments = ['self'] + arguments
+        super().__init__(name, arguments, indent_level=indent_level, decorators=decorators)
 
 
 class Class(Block):
@@ -73,9 +124,8 @@ class Class(Block):
         subclasses = ""
 
         # get tabs for indenting
-        tabs = '\t' * self.level
+        tabs = '\t' * self.get_indent_level()
         if self.base_class is None:
-
             class_def = f"\n\n{tabs}class {self.name}:"
         else:
             class_def = f"\n\n{tabs}class {self.name}({self.base_class}):"
@@ -84,7 +134,7 @@ class Class(Block):
             init = f"\n\t{tabs}def __init__(self):\n\t\t{tabs}# initialise class here\n\t\tpass"
 
         for method in self.methods:
-            methods = methods + f"\n\t{tabs}{str(method)}"
+            methods = methods + f"\n{str(method)}"
 
         for var in self.class_variables:
             class_vars = class_vars + "\n\t" + tabs + var + " = " + self.class_variables[var]
@@ -94,8 +144,16 @@ class Class(Block):
 
         return f"{class_def}{subclasses}{class_vars}{init}{methods}\n"
 
-    def add_method(self, method_name: str, arguments_names: list[str]):
-        self.methods.append(Method(name=method_name, arguments=arguments_names))
+    def add_method(self, method_name: str = None, arguments_names: list[str] = None, decorators: List[str] = None,
+                   method: Method = None):
+        if method is not None:
+            method.indent_level = self.get_indent_level() + 1
+            self.methods.append(method)
+        else:
+            if method_name is None or arguments_names is None:
+                raise CodegenError('method name or argument name invalid')
+            self.methods.append(Method(name=method_name, arguments=arguments_names, decorators=decorators,
+                                       indent_level=self.get_indent_level() + 1))
 
     def add_class_variable(self, variable_name, variable_value):
         value = str(variable_value)
@@ -168,18 +226,6 @@ class ClassInstance:
         self.kwargs[key] = value
 
 
-class Expr:
-    """
-    This simple class represents a python expression e.g: a < b
-    """
-
-    def __init__(self, expression: str):
-        self.expression = expression
-
-    def __str__(self):
-        return self.expression
-
-
 class If(Block):
     def __init__(self, expr: Expr, action: List[Expr], if_type: str = 'if', indent_level=0):
         self.expr = expr
@@ -190,13 +236,16 @@ class If(Block):
     def __str__(self):
         actions = ''
         tabs = self.get_indent_level() * '\t'
-        for action in self.action:
-            actions = actions + tabs + '\t' + str(action) + '\n'
+        for i, action in enumerate(self.action):
+            if i == len(self.action) - 1:
+                actions = actions + tabs + '\t' + str(action)
+            else:
+                actions = actions + tabs + '\t' + str(action) + '\n'
         return f"\n{tabs}{self.type} {str(self.expr)}:\n{actions}"
 
 
 class IfElse(Block):
-    def __init__(self, if_: If, else_action: List[Expr], indent_level=0, elifs: List[If] = None):
+    def __init__(self, else_action: List[Expr], indent_level=0, elifs: List[If] = None, if_: If = None):
         if elifs is None:
             elifs = []
         self.if_ = if_
@@ -205,6 +254,8 @@ class IfElse(Block):
         super().__init__(indent_level)
 
     def __str__(self):
+        if self.if_ is None:
+            raise CodegenError('No If object attached to IfElse object')
         tabs = self.get_indent_level() * '\t'
         if_action = ''
         for expr in self.if_.action:
@@ -238,9 +289,13 @@ class IfElse(Block):
             elif_: the elif statement to add
 
         """
-        elif_.type = 'elif'
-        elif_.set_indent_level(self.indent_level)
-        self.elifs.append(elif_)
+        if self.if_ is None:
+            elif_.type = 'if'
+            self.if_ = elif_
+        else:
+            elif_.type = 'elif'
+            elif_.set_indent_level(self.indent_level)
+            self.elifs.append(elif_)
 
 
 class CodegenTool:
@@ -315,7 +370,6 @@ class CodegenTool:
 
 
 if __name__ == '__main__':
-
     # c = Class(name='NewException', base_class='Exception', add_init_method=True)
     # c.add_method(method_name='get_message', arguments_names=[])
     # c.add_method(method_name='another_method', arguments_names=['message'])
@@ -335,7 +389,7 @@ if __name__ == '__main__':
     ie.add_elif(
         If(
             expr=Expr(f"{String('a')} == {String('b')}"),
-            action=[Expr("print('false')"),Expr("print('false')"),Expr("print('false')")],
+            action=[Expr("print('false')"), Expr("print('false')"), Expr("print('false')")],
             if_type='elif'
         )
     )
