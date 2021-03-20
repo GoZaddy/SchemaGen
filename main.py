@@ -69,8 +69,6 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     else:
                         field_desc = ''
 
-                    print(var_value.lower())
-                    print(type_class.name.lower())
                     if is_interface:
                         if var_value.lower() == type_class.name.lower():
                             var_value = 'lambda: ' + var_value
@@ -107,6 +105,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 self.codegen.write_class(type_class)
 
+            # type definition is for an EnumTypeDefinition
             elif isinstance(child, GraphQLParser.EnumTypeDefinitionContext):
                 enum_class = Class(name=child.name().getText(), base_class="Enum", add_init_method=False)
                 meta_class = Class(name='meta')
@@ -125,9 +124,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                     # get enum description
                     field_desc = field.description()
-                    print(field_desc)
                     if field_desc is not None:
-                        print(field.description().getText())
                         field_desc = String(strip_string_quotes(field_desc.getText()))
                     else:
                         field_desc = ''
@@ -166,6 +163,65 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 self.codegen.write_class(enum_class)
 
+            # type definition is for an EnumTypeDefinition
+            elif isinstance(child, GraphQLParser.ScalarTypeDefinitionContext):
+                scalar_class = Class(name=child.name().getText(), base_class="Scalar", add_init_method=False)
+                desc = child.description()
+
+                if desc is not None:
+                    scalar_class.description = strip_string_quotes(desc.getText())
+
+                serialize_method = Method(
+                    name='serialize',
+                    arguments=['val'],
+                    decorators=['@staticmethod'],
+                    body=[Expr('# write method body'), Expr('pass')],
+                    is_static=True
+                )
+                parse_literal_method = Method(
+                    name='parse_literal',
+                    arguments=['node'],
+                    decorators=['@staticmethod'],
+                    body=[Expr('# write method body'), Expr('pass')],
+                    is_static=True
+                )
+
+                parse_value_method = Method(
+                    name='parse_value',
+                    arguments=['value'],
+                    decorators=['@staticmethod'],
+                    body=[Expr('# write method body'), Expr('pass')],
+                    is_static=True
+                )
+
+                scalar_class.add_method(method=serialize_method)
+                scalar_class.add_method(method=parse_literal_method)
+                scalar_class.add_method(method=parse_value_method)
+
+                self.codegen.write_class(scalar_class)
+
+            elif isinstance(child, GraphQLParser.UnionTypeDefinitionContext):
+                union_class = Class(name=child.name().getText(), base_class='Union')
+                meta_class = Class(name='Meta')
+
+                unions = child.unionMemberTypes().getText()
+
+                if unions[0] == '=':
+                    unions = unions[1:]
+
+                unions = ', '.join(unions.split(sep='|'))
+
+                meta_class.add_class_variable(variable_name='types', variable_value=f"({unions})")
+
+                desc = child.description()
+
+                if desc is not None:
+                    meta_class.add_class_variable(variable_name='description', variable_value=String(strip_string_quotes(desc.getText())))
+
+                union_class.add_sub_class(meta_class)
+                self.codegen.write_class(union_class)
+                print(unions)
+
             else:
                 print(type(child))
 
@@ -178,7 +234,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
         tree = parser.document()
         walker = ParseTreeWalker()
         walker.walk(self, tree)
-        print(tree.toStringTree(recog=parser))
+        # print(tree.toStringTree(recog=parser))
 
 
 # Press the green button in the gutter to run the script.

@@ -3,7 +3,7 @@ from math import floor
 import autopep8
 import re
 from typing import NewType, List
-from utils import stringify
+from utils import stringify, triple_stringify
 from errors import CodegenError
 
 
@@ -85,6 +85,9 @@ class Function(Block):
             body_lines = ''
             for block in self.body:
                 block.set_indent_level(self.get_indent_level() + 1)
+                if isinstance(block, Expr):
+                    body_lines = body_lines + '\n' + str(block)
+                    continue
                 body_lines = body_lines + str(block)
 
             return f"{decorators}\n{tabs}def {self.name}({args}):{body_lines}"
@@ -101,19 +104,23 @@ class Function(Block):
 
 # TODO: make sure everything works well after sha
 class Method(Function):
-    def __init__(self, name: str, arguments: list[str], indent_level=1, decorators: List[str] = None):
-        arguments = ['self'] + arguments
-        super().__init__(name, arguments, indent_level=indent_level, decorators=decorators)
+    def __init__(self, name: str, arguments: list[str], indent_level=1, decorators: List[str] = None,
+                 body: List[Block] = None, is_static: bool = False):
+        if not is_static:
+            arguments = ['self'] + arguments
+        super().__init__(name, arguments, indent_level=indent_level, decorators=decorators, body=body)
 
 
 class Class(Block):
-    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, indent_level=0):
-        self.name = name.capitalize()
+    def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, indent_level=0,
+                 description: str = None):
+        self.name = name[0].upper()+name[1:]
         self.base_class = base_class
         self.add_init_method = add_init_method
         self.methods = []
         self.class_variables = {}
         self.subclasses = []
+        self.description = description
         super().__init__(indent_level)
 
     def __str__(self):
@@ -123,12 +130,16 @@ class Class(Block):
         class_vars = ""
         subclasses = ""
 
+        description = ''
+        if self.description != '':
+            description = '\n\t' + self.description
+
         # get tabs for indenting
         tabs = '\t' * self.get_indent_level()
         if self.base_class is None:
-            class_def = f"\n\n{tabs}class {self.name}:"
+            class_def = f"\n\n{tabs}class {self.name}:{description}"
         else:
-            class_def = f"\n\n{tabs}class {self.name}({self.base_class}):"
+            class_def = f"\n\n{tabs}class {self.name}({self.base_class}):{description}"
 
         if self.add_init_method is True:
             init = f"\n\t{tabs}def __init__(self):\n\t\t{tabs}# initialise class here\n\t\tpass"
@@ -163,6 +174,17 @@ class Class(Block):
         # increase the subclass indent by 1 greater than the parent class' indent
         _class.set_indent_level(self.get_indent_level() + 1)
         self.subclasses.append(_class)
+
+    @property
+    def description(self):
+        return self._description
+
+    @description.setter
+    def description(self, description: str):
+        if description is None:
+            self._description = ''
+        else:
+            self._description = triple_stringify(description)
 
 
 class Variable:
@@ -378,20 +400,22 @@ if __name__ == '__main__':
     # codegen.write_class(c)
     # a = ClassInstance('name', String('arg1'), String('arg2'), kwarg1='kwarg10', required='True')
     codegen = CodegenTool('test.py')
-    ie = IfElse(
-        if_=If(
-            expr=Expr(f"{String('a')} != {String('b')}"),
-            action=[Expr("print('true')"), Expr("print('true')"), Expr("print('true')")]
-        ),
-        else_action=[Expr("print('else')")],
-    )
+    # ie = IfElse(
+    #     if_=If(
+    #         expr=Expr(f"{String('a')} != {String('b')}"),
+    #         action=[Expr("print('true')"), Expr("print('true')"), Expr("print('true')")]
+    #     ),
+    #     else_action=[Expr("print('else')")],
+    # )
+    #
+    # ie.add_elif(
+    #     If(
+    #         expr=Expr(f"{String('a')} == {String('b')}"),
+    #         action=[Expr("print('false')"), Expr("print('false')"), Expr("print('false')")],
+    #         if_type='elif'
+    #     )
+    # )
 
-    ie.add_elif(
-        If(
-            expr=Expr(f"{String('a')} == {String('b')}"),
-            action=[Expr("print('false')"), Expr("print('false')"), Expr("print('false')")],
-            if_type='elif'
-        )
-    )
+    cls = Class(name='randomshii', description='hEY BABE')
 
-    codegen.write_if_else(ie)
+    codegen.write_if_else(cls)
