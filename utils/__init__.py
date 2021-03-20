@@ -21,5 +21,16 @@ def snake_case_to_camel_case(string) -> str:
     return ''.join(parts)
 
 
+def camel_case_to_snake_case(string) -> str:
+    parts = list(string)
+    for i, part in enumerate(parts):
+        if part.isupper():
+            if i == 0:
+                parts[i] = part.lower()
+                continue
+            parts[i] = '_' + part.lower()
+    return ''.join(parts)
+
+
 if __name__ == '__main__':
-    print(snake_case_to_camel_case('snake_case_to_camel_case'))
+    print(camel_case_to_snake_case('CamelCaseToBeFuckingTransformed'))

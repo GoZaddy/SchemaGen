@@ -4,7 +4,7 @@ from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Metho
 import re
 from math import floor
 from datetime import datetime
-from utils import strip_string_quotes
+from utils import strip_string_quotes, camel_case_to_snake_case
 
 GraphQLParser = GraphQLParser.GraphQLParser
 
@@ -40,6 +40,9 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     type_class = Class(name=child.name().getText(), base_class="Interface", add_init_method=False)
                 meta_class = Class(name='meta')
 
+                # create map for methods to be resolved
+                methods_to_be_resolved = {}
+
                 # get type description
                 desc = child.description()
                 if desc:
@@ -59,8 +62,9 @@ class SDLParser(GraphQLListener.GraphQLListener):
                 fields = child.fieldsDefinition().fields
                 for field in fields:
                     # get field name and type
-                    var_name = field.name().getText()
+                    var_name = camel_case_to_snake_case(field.name().getText())
                     var_value = field.type_().getText()
+                    field_required = False
 
                     # get field description
                     field_desc = field.description()
@@ -75,6 +79,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                     # if field is a required field
                     if var_value[len(var_value) - 1] == '!':
+                        field_required = True
                         field_code = ClassInstance('Field', var_value[:-1], required=True)
                     else:
                         field_code = ClassInstance('Field', var_value)
@@ -88,16 +93,62 @@ class SDLParser(GraphQLListener.GraphQLListener):
                                 list_type_named_type = 'lambda: ' + list_type_named_type
 
                         if list_type_named_type[len(list_type_named_type) - 1] == '!':
-                            field_code = ClassInstance('List', str(ClassInstance('NonNull', list_type_named_type[:-1])))
+                            field_code = ClassInstance('List', str(ClassInstance('NonNull', list_type_named_type[:-1])),
+                                                       required=field_required)
                         else:
-                            field_code = ClassInstance('List', list_type_named_type)
+                            field_code = ClassInstance('List', list_type_named_type, required=field_required)
+
+                    # get field arguments
+                    args = field.argumentsDefinition()
+                    args_string = []
+                    if args is not None:
+                        args = args.args
+                        for arg in args:
+                            # add info to method_to_be_resolved map
+                            if var_name not in methods_to_be_resolved:
+                                methods_to_be_resolved[var_name] = [arg.name().getText()]
+                            else:
+                                methods_to_be_resolved[var_name].append(arg.name().getText())
+                            arg_type = arg.type_().getText()
+                            arg_required = False
+                            if arg_type[len(arg_type) - 1] == '!':
+                                arg_required = True
+                                arg_type = arg_type[:-1]
+
+                            arg_impl = ClassInstance(arg_type, required=arg_required)
+
+                            # if any of the argument types is a list type:
+                            if arg.type_().listType() is not None:
+                                list_type_named_type = arg.type_().listType().type_().getText()
+                                if list_type_named_type[len(list_type_named_type) - 1] == '!':
+                                    arg_impl = ClassInstance('List', str(
+                                        ClassInstance('NonNull', list_type_named_type[:-1])), required=arg_required)
+                                else:
+                                    arg_impl = ClassInstance('List', list_type_named_type, required=arg_required)
+
+                            # get argument description
+                            if arg.description() is not None:
+                                arg_desc = arg.description().getText()
+                                arg_impl.add_kwarg('description', arg_desc)
+
+                            # get argument default value
+                            if arg.defaultValue() is not None:
+                                arg_impl.add_kwarg('default_value', arg.defaultValue().value().getText())
+                            args_string.append(f"{String(arg.name().getText())}: {str(arg_impl)}")
+
+                        field_code.add_kwarg('args', "{" + ', '.join(args_string) + "}")
 
                     if field_desc != '':
                         field_code.add_kwarg(key='description', value=field_desc)
-
                     type_class.class_variables[var_name] = str(field_code)
+
+                # add resolver methods
+                for method in methods_to_be_resolved:
+                    type_class.add_method(method_name='resolve_' + method,
+                                          arguments_names=['info'] + methods_to_be_resolved[method])
+
                 if type_class.name == 'Query':
-                    for var in type_class.class_variables:
+                    for var in type_class.class_variables and var not in methods_to_be_resolved:
                         type_class.add_method(method_name='resolve_' + var, arguments_names=['info'])
 
                 if len(meta_class.class_variables) != 0:
@@ -216,7 +267,8 @@ class SDLParser(GraphQLListener.GraphQLListener):
                 desc = child.description()
 
                 if desc is not None:
-                    meta_class.add_class_variable(variable_name='description', variable_value=String(strip_string_quotes(desc.getText())))
+                    meta_class.add_class_variable(variable_name='description',
+                                                  variable_value=String(strip_string_quotes(desc.getText())))
 
                 union_class.add_sub_class(meta_class)
                 self.codegen.write_class(union_class)

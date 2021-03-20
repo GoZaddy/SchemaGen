@@ -73,7 +73,7 @@ class Function(Block):
     def __str__(self):
         args = ""
         if len(self.arguments) != 0:
-            args = ','.join(self.arguments)
+            args = ', '.join(self.arguments)
         tabs = '\t' * self.get_indent_level()
         decorators = ''
         for i in self.decorators:
@@ -222,25 +222,21 @@ class ClassInstance:
         self.kwargs = kwargs
 
     def __str__(self):
-        args = ""
-        kwargs = ", "
+        args = ', '
+        kwargs = []
 
-        for arg in self.args:
-            if isinstance(arg, String):
-                arg = str(arg)
-            args = args + f"{arg}, "
-        args = args[:-2]
+        args = ', '.join(self.args)
 
         for kwarg in self.kwargs:
             val = self.kwargs[kwarg]
             if isinstance(val, String):
                 val = str(val)
-            kwargs = kwargs + f"{kwarg}={val}, "
+            kwargs.append(f"{kwarg}={val}")
 
-        kwargs = kwargs[:-2]
-
-        if kwargs == ', ':
-            args = args[:-1]
+        kwargs = ', '.join(kwargs)
+        if kwargs != '':
+            if args != '':
+                kwargs = ', ' + kwargs
 
         return f"{self.class_name}({args}{kwargs})"
 

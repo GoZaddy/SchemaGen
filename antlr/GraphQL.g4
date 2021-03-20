@@ -178,7 +178,7 @@ fieldsDefinition: '{' fields+=fieldDefinition+ '}';
 fieldDefinition: description? name  argumentsDefinition? ':' type_  directives? ;
 
 //https://spec.graphql.org/June2018/#sec-Field-Arguments
-argumentsDefinition: '(' inputValueDefinition+ ')';
+argumentsDefinition: '(' args+=inputValueDefinition+ ')';
 inputValueDefinition:  description? name ':' type_ defaultValue? directives?;
 
 //https://spec.graphql.org/June2018/#sec-Object-Extensions
