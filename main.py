@@ -4,7 +4,7 @@ from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Metho
 import re
 from math import floor
 from datetime import datetime
-from utils import strip_string_quotes, camel_case_to_snake_case
+from utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
 
 GraphQLParser = GraphQLParser.GraphQLParser
 
@@ -33,11 +33,13 @@ class SDLParser(GraphQLListener.GraphQLListener):
                                                                                           GraphQLParser.InterfaceTypeDefinitionContext):
                 is_object_type = isinstance(child, GraphQLParser.ObjectTypeDefinitionContext)
                 is_interface = isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext)
+                is_input = isinstance(child, GraphQLParser.InputObjectTypeDefinitionContext)
 
                 if is_object_type:
                     type_class = Class(name=child.name().getText(), base_class="ObjectType", add_init_method=False)
                 elif is_interface:
                     type_class = Class(name=child.name().getText(), base_class="Interface", add_init_method=False)
+
                 meta_class = Class(name='meta')
 
                 # create map for methods to be resolved
@@ -58,7 +60,8 @@ class SDLParser(GraphQLListener.GraphQLListener):
                             interface_string = interface_string + i + ','
                         meta_class.add_class_variable('interfaces', f"({interface_string})")
 
-                # get fields of the ObjectType
+                # get fields of the ObjectType or Interface
+
                 fields = child.fieldsDefinition().fields
                 for field in fields:
                     # get field name and type
@@ -99,44 +102,21 @@ class SDLParser(GraphQLListener.GraphQLListener):
                             field_code = ClassInstance('List', list_type_named_type, required=field_required)
 
                     # get field arguments
-                    args = field.argumentsDefinition()
-                    args_string = []
-                    if args is not None:
-                        args = args.args
-                        for arg in args:
-                            # add info to method_to_be_resolved map
-                            if var_name not in methods_to_be_resolved:
-                                methods_to_be_resolved[var_name] = [arg.name().getText()]
-                            else:
-                                methods_to_be_resolved[var_name].append(arg.name().getText())
-                            arg_type = arg.type_().getText()
-                            arg_required = False
-                            if arg_type[len(arg_type) - 1] == '!':
-                                arg_required = True
-                                arg_type = arg_type[:-1]
-
-                            arg_impl = ClassInstance(arg_type, required=arg_required)
-
-                            # if any of the argument types is a list type:
-                            if arg.type_().listType() is not None:
-                                list_type_named_type = arg.type_().listType().type_().getText()
-                                if list_type_named_type[len(list_type_named_type) - 1] == '!':
-                                    arg_impl = ClassInstance('List', str(
-                                        ClassInstance('NonNull', list_type_named_type[:-1])), required=arg_required)
+                    if is_object_type:
+                        args = field.argumentsDefinition()
+                        args_string = []
+                        if args is not None:
+                            args = args.args
+                            for arg in args:
+                                # add info to method_to_be_resolved map
+                                if var_name not in methods_to_be_resolved:
+                                    methods_to_be_resolved[var_name] = [arg.name().getText()]
                                 else:
-                                    arg_impl = ClassInstance('List', list_type_named_type, required=arg_required)
+                                    methods_to_be_resolved[var_name].append(arg.name().getText())
+                                processed_arg = process_input_value_definition(arg)
+                                args_string.append(f"{String(processed_arg['name'])}: {str(processed_arg['arg_impl'])}")
 
-                            # get argument description
-                            if arg.description() is not None:
-                                arg_desc = arg.description().getText()
-                                arg_impl.add_kwarg('description', arg_desc)
-
-                            # get argument default value
-                            if arg.defaultValue() is not None:
-                                arg_impl.add_kwarg('default_value', arg.defaultValue().value().getText())
-                            args_string.append(f"{String(arg.name().getText())}: {str(arg_impl)}")
-
-                        field_code.add_kwarg('args', "{" + ', '.join(args_string) + "}")
+                            field_code.add_kwarg('args', "{" + ', '.join(args_string) + "}")
 
                     if field_desc != '':
                         field_code.add_kwarg(key='description', value=field_desc)
@@ -148,8 +128,9 @@ class SDLParser(GraphQLListener.GraphQLListener):
                                           arguments_names=['info'] + methods_to_be_resolved[method])
 
                 if type_class.name == 'Query':
-                    for var in type_class.class_variables and var not in methods_to_be_resolved:
-                        type_class.add_method(method_name='resolve_' + var, arguments_names=['info'])
+                    for var in type_class.class_variables:
+                        if var not in methods_to_be_resolved:
+                            type_class.add_method(method_name='resolve_' + var, arguments_names=['info'])
 
                 if len(meta_class.class_variables) != 0:
                     type_class.add_sub_class(meta_class)
@@ -274,6 +255,25 @@ class SDLParser(GraphQLListener.GraphQLListener):
                 self.codegen.write_class(union_class)
                 print(unions)
 
+            elif isinstance(child, GraphQLParser.InputObjectTypeDefinitionContext):
+                type_class = Class(name=child.name().getText(), base_class="InputObjectType", add_init_method=False)
+                meta_class = Class(name='meta')
+
+                # get type description
+                desc = child.description()
+                if desc:
+                    meta_class.add_class_variable('description', String(strip_string_quotes(desc.getText())))
+
+                # get fields
+                fields = child.inputFieldsDefinition().fields
+                for field in fields:
+                    processed_ivd = process_input_value_definition(field)
+                    type_class.add_class_variable(processed_ivd['name'], str(processed_ivd['arg_impl']))
+
+                if len(meta_class.class_variables) != 0:
+                    type_class.add_sub_class(meta_class)
+
+                self.codegen.write_class(type_class)
             else:
                 print(type(child))
 

@@ -217,7 +217,7 @@ enumTypeExtension: 'extend' 'enum' name directives? enumValuesDefinition
 
 //https://spec.graphql.org/June2018/#sec-Input-Objects
 inputObjectTypeDefinition: description? 'input' name directives? inputFieldsDefinition?;
-inputFieldsDefinition: '{' inputValueDefinition+ '}';
+inputFieldsDefinition: '{' fields+=inputValueDefinition+ '}';
 
 //https://spec.graphql.org/June2018/#sec-Input-Object-Extensions
 inputObjectTypeExtension:  'extend' 'input' name directives? inputFieldsDefinition
