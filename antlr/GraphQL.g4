@@ -124,7 +124,7 @@ typeSystemExtension: schemaExtension
 
 // https://graphql.github.io/graphql-spec/June2018/#sec-Schema
 schemaDefinition:
-	 'schema' directives? '{' rootOperationTypeDefinition+ '}';
+	 'schema' directives? '{' fields+=rootOperationTypeDefinition+ '}';
 
 rootOperationTypeDefinition: operationType ':' namedType;
 

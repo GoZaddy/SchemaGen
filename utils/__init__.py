@@ -2,6 +2,8 @@ def strip_string_quotes(string: str) -> str:
     if string[0] == '"' and string[len(string) - 1] == '"':
         res = string[1:]
         res = res[:-1]
+    else:
+        return string
     return res
 
 

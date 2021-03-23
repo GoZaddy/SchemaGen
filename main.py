@@ -1,6 +1,6 @@
 from antlr4 import *
 from antlr import GraphQLParser, GraphQLLexer, GraphQLListener
-from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr
+from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
 import re
 from math import floor
 from datetime import datetime
@@ -33,12 +33,17 @@ class SDLParser(GraphQLListener.GraphQLListener):
                                                                                           GraphQLParser.InterfaceTypeDefinitionContext):
                 is_object_type = isinstance(child, GraphQLParser.ObjectTypeDefinitionContext)
                 is_interface = isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext)
-                is_input = isinstance(child, GraphQLParser.InputObjectTypeDefinitionContext)
 
+                type_class = Class(name=child.name().getText(), add_init_method=False)
                 if is_object_type:
-                    type_class = Class(name=child.name().getText(), base_class="ObjectType", add_init_method=False)
+                    type_class.base_class = "ObjectType"
                 elif is_interface:
-                    type_class = Class(name=child.name().getText(), base_class="Interface", add_init_method=False)
+                    type_class.base_class = "Interface"
+
+                is_mutation = False
+                if type_class.name == 'Mutation':
+                    is_mutation = True
+                    is_object_type = False
 
                 meta_class = Class(name='meta')
 
@@ -51,7 +56,7 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     meta_class.add_class_variable('description', String(strip_string_quotes(desc.getText())))
 
                 # get implemented interfaces
-                if is_object_type:
+                if is_object_type or is_mutation:
                     if child.implementsInterfaces() is not None:
                         interfaces = child.implementsInterfaces().getText().split(sep='implements')
                         interfaces = interfaces[1].split(sep='&')
@@ -62,70 +67,135 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
                 # get fields of the ObjectType or Interface
 
-                fields = child.fieldsDefinition().fields
-                for field in fields:
-                    # get field name and type
-                    var_name = camel_case_to_snake_case(field.name().getText())
-                    var_value = field.type_().getText()
-                    field_required = False
+                if child.fieldsDefinition():
+                    fields = child.fieldsDefinition().fields
+                    if not is_mutation:
+                        for field in fields:
+                            # get field name and type
+                            field_name = camel_case_to_snake_case(field.name().getText())
+                            field_type = field.type_().getText()
+                            field_required = False
 
-                    # get field description
-                    field_desc = field.description()
-                    if field_desc is not None:
-                        field_desc = String(strip_string_quotes(field_desc.getText()))
-                    else:
-                        field_desc = ''
+                            # get field description
+                            field_desc = field.description()
+                            if field_desc is not None:
+                                field_desc = String(strip_string_quotes(field_desc.getText()))
+                            else:
+                                field_desc = ''
 
-                    if is_interface:
-                        if var_value.lower() == type_class.name.lower():
-                            var_value = 'lambda: ' + var_value
+                            if is_interface:
+                                if field_type.lower() == type_class.name.lower():
+                                    field_type = 'lambda: ' + field_type
 
-                    # if field is a required field
-                    if var_value[len(var_value) - 1] == '!':
-                        field_required = True
-                        field_code = ClassInstance('Field', var_value[:-1], required=True)
-                    else:
-                        field_code = ClassInstance('Field', var_value)
+                            # if field is a required field
+                            if field_type[len(field_type) - 1] == '!':
+                                field_required = True
+                                field_code = ClassInstance('Field', field_type[:-1], required=True)
+                            else:
+                                field_code = ClassInstance('Field', field_type)
 
-                    # if field is a list type
-                    if field.type_().listType() is not None:
-                        list_type_named_type = field.type_().listType().type_().getText()
+                            # if field is a list type
+                            if field.type_().listType() is not None:
+                                list_type_named_type = field.type_().listType().type_().getText()
 
-                        if is_interface:
-                            if list_type_named_type.lower() == type_class.name.lower():
-                                list_type_named_type = 'lambda: ' + list_type_named_type
+                                if is_interface:
+                                    if list_type_named_type.lower() == type_class.name.lower():
+                                        list_type_named_type = 'lambda: ' + list_type_named_type
 
-                        if list_type_named_type[len(list_type_named_type) - 1] == '!':
-                            field_code = ClassInstance('List', str(ClassInstance('NonNull', list_type_named_type[:-1])),
-                                                       required=field_required)
-                        else:
-                            field_code = ClassInstance('List', list_type_named_type, required=field_required)
-
-                    # get field arguments
-                    if is_object_type:
-                        args = field.argumentsDefinition()
-                        args_string = []
-                        if args is not None:
-                            args = args.args
-                            for arg in args:
-                                # add info to method_to_be_resolved map
-                                if var_name not in methods_to_be_resolved:
-                                    methods_to_be_resolved[var_name] = [arg.name().getText()]
+                                if list_type_named_type[len(list_type_named_type) - 1] == '!':
+                                    field_code = ClassInstance('List',
+                                                               str(ClassInstance('NonNull', list_type_named_type[:-1])),
+                                                               required=field_required)
                                 else:
-                                    methods_to_be_resolved[var_name].append(arg.name().getText())
-                                processed_arg = process_input_value_definition(arg)
-                                args_string.append(f"{String(processed_arg['name'])}: {str(processed_arg['arg_impl'])}")
+                                    field_code = ClassInstance('List', list_type_named_type, required=field_required)
 
-                            field_code.add_kwarg('args', "{" + ', '.join(args_string) + "}")
+                            # get field arguments
+                            if is_object_type:
+                                args = field.argumentsDefinition()
+                                args_string = []
+                                if args is not None:
+                                    args = args.args
+                                    for arg in args:
+                                        # add info to method_to_be_resolved map
+                                        if field_name not in methods_to_be_resolved:
+                                            methods_to_be_resolved[field_name] = [arg.name().getText()]
+                                        else:
+                                            methods_to_be_resolved[field_name].append(arg.name().getText())
+                                        processed_arg = process_input_value_definition(arg)
+                                        args_string.append(
+                                            f"{String(processed_arg['name'])}: {str(processed_arg['arg_impl'])}")
 
-                    if field_desc != '':
-                        field_code.add_kwarg(key='description', value=field_desc)
-                    type_class.class_variables[var_name] = str(field_code)
+                                    field_code.add_kwarg('args', "{" + ', '.join(args_string) + "}")
+
+                            if field_desc != '':
+                                field_code.add_kwarg(key='description', value=field_desc)
+                            type_class.class_variables[field_name] = str(field_code)
+                    else:
+                        for field in fields:
+                            # get field name and type
+                            field_name = camel_case_to_snake_case(field.name().getText())
+                            field_type = field.type_().getText()
+                            field_required = False
+
+                            field_class = Class(field.name().getText(), add_init_method=False, base_class='Mutation')
+                            argument_class = Class(name='arguments')
+
+                            # get field description
+                            field_desc = field.description()
+                            if field_desc is not None:
+                                field_desc = String(strip_string_quotes(field_desc.getText()))
+                            else:
+                                field_desc = ''
+
+                            # if field is a required field
+                            if field_type[len(field_type) - 1] == '!':
+                                field_required = True
+                                field_code = ClassInstance('Field', field_type[:-1], required=True)
+                            else:
+                                field_code = ClassInstance('Field', field_type)
+
+                            # if field is a list type
+                            if field.type_().listType() is not None:
+                                list_type_named_type = field.type_().listType().type_().getText()
+
+                                if list_type_named_type[len(list_type_named_type) - 1] == '!':
+                                    field_code = ClassInstance('List',
+                                                               str(ClassInstance('NonNull', list_type_named_type[:-1])),
+                                                               required=field_required)
+                                else:
+                                    field_code = ClassInstance('List', list_type_named_type, required=field_required)
+
+                            # get field arguments
+                            args = field.argumentsDefinition()
+                            arg_list = []
+                            if args is not None:
+                                args = args.args
+                                for arg in args:
+                                    processed_arg = process_input_value_definition(arg)
+                                    argument_class.add_class_variable(processed_arg['name'],
+                                                                      str(processed_arg['arg_impl']))
+                                    arg_list.append(processed_arg['name'])
+
+                            field_class.add_sub_class(argument_class)
+                            field_class.add_method(
+                                method=Method(
+                                    name='mutate',
+                                    arguments=['root', 'info'] + arg_list
+                                )
+                            )
+
+                            if field_desc != '':
+                                field_code.add_kwarg(key='description', value=field_desc)
+
+                            # write mutation classes for the mutation's fields
+                            self.codegen.write_class(field_class)
+                            type_class.class_variables[field_name] = str(field_code)
 
                 # add resolver methods
-                for method in methods_to_be_resolved:
-                    type_class.add_method(method_name='resolve_' + method,
-                                          arguments_names=['info'] + methods_to_be_resolved[method])
+                if not is_mutation:
+                    for method in methods_to_be_resolved:
+                        type_class.add_method(method_name='resolve_' + method,
+                                              arguments_names=['info'] + methods_to_be_resolved[method])
 
                 if type_class.name == 'Query':
                     for var in type_class.class_variables:
@@ -265,10 +335,11 @@ class SDLParser(GraphQLListener.GraphQLListener):
                     meta_class.add_class_variable('description', String(strip_string_quotes(desc.getText())))
 
                 # get fields
-                fields = child.inputFieldsDefinition().fields
-                for field in fields:
-                    processed_ivd = process_input_value_definition(field)
-                    type_class.add_class_variable(processed_ivd['name'], str(processed_ivd['arg_impl']))
+                if child.inputFieldsDefinition():
+                    fields = child.inputFieldsDefinition().fields
+                    for field in fields:
+                        processed_ivd = process_input_value_definition(field)
+                        type_class.add_class_variable(processed_ivd['name'], str(processed_ivd['arg_impl']))
 
                 if len(meta_class.class_variables) != 0:
                     type_class.add_sub_class(meta_class)
@@ -276,6 +347,21 @@ class SDLParser(GraphQLListener.GraphQLListener):
                 self.codegen.write_class(type_class)
             else:
                 print(type(child))
+
+    def enterSchemaDefinition(self, ctx: GraphQLParser.SchemaDefinitionContext):
+
+        schema_obj = ClassInstance('Schema')
+
+        fields = ctx.fields
+        for field in fields:
+            schema_obj.add_kwarg(strip_string_quotes(field.operationType().getText()),
+                                 strip_string_quotes(field.namedType().getText()))
+
+        var = Variable(
+            name='schema',
+            value=schema_obj
+        )
+        self.codegen.write_variable(var)
 
     def __call__(self):
         self.codegen.import_package(package=graphene, mode=2, object='*')

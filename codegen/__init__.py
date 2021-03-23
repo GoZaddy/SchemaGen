@@ -153,7 +153,11 @@ class Class(Block):
         for subclass in self.subclasses:
             subclasses = "\t" + str(subclass)
 
-        return f"{class_def}{subclasses}{class_vars}{init}{methods}\n"
+        if subclasses or class_vars or init or methods:
+            return f"{class_def}{subclasses}{class_vars}{init}{methods}\n"
+        else:
+            pass_expr = Expr('pass', indent_level=1)
+            return f"{class_def}\n{str(pass_expr)}\n"
 
     def add_method(self, method_name: str = None, arguments_names: list[str] = None, decorators: List[str] = None,
                    method: Method = None):
@@ -193,8 +197,8 @@ class Variable:
         self.value = value
 
     def __str__(self):
-        if isinstance(self.value, str):
-            value = "'" + self.value + "'"
+        if isinstance(self.value, String) or isinstance(self.value, ClassInstance):
+            value = str(self.value)
         else:
             value = self.value
         return "\n" + self.name + " = " + value
