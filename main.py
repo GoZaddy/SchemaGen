@@ -9,6 +9,19 @@ from utils import strip_string_quotes, camel_case_to_snake_case, process_input_v
 GraphQLParser = GraphQLParser.GraphQLParser
 
 graphene = 'graphene'
+built_in_scalars = [
+    'Int',
+    'Float',
+    'String',
+    'Boolean',
+    'ID',
+    'Date',
+    'Datetime',
+    'Time'
+    'Decimal',
+    'JSONString',
+    'Base64',
+]
 
 
 class SDLParser(GraphQLListener.GraphQLListener):
@@ -27,7 +40,6 @@ class SDLParser(GraphQLListener.GraphQLListener):
     def enterTypeDefinition(self, ctx: GraphQLParser.TypeDefinitionContext):
 
         for child in ctx.children:
-
             # type definition is for an Object Type Definition
             if isinstance(child, GraphQLParser.ObjectTypeDefinitionContext) or isinstance(child,
                                                                                           GraphQLParser.InterfaceTypeDefinitionContext):
@@ -267,6 +279,8 @@ class SDLParser(GraphQLListener.GraphQLListener):
 
             # type definition is for an EnumTypeDefinition
             elif isinstance(child, GraphQLParser.ScalarTypeDefinitionContext):
+                if child.name().getText().capitalize() in built_in_scalars:
+                    continue
                 scalar_class = Class(name=child.name().getText(), base_class="Scalar", add_init_method=False)
                 desc = child.description()
 
