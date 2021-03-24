@@ -2,9 +2,9 @@ import datetime
 from math import floor
 import autopep8
 import re
-from typing import NewType, List
-from utils import stringify, triple_stringify
-from errors import CodegenError
+from typing import List
+from schema_gen.utils import stringify, triple_stringify
+from schema_gen.errors import CodegenError
 
 
 class Block:

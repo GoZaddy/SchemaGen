@@ -1,10 +1,11 @@
 from antlr4 import *
-from antlr import GraphQLParser, GraphQLLexer, GraphQLListener
-from codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
+from schema_gen.antlr import GraphQLLexer, GraphQLListener, GraphQLParser
+from schema_gen.codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
 import re
 from math import floor
 from datetime import datetime
-from utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
+from schema_gen.utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
+from schema_gen.errors import ParsingError
 
 GraphQLParser = GraphQLParser.GraphQLParser
 
@@ -378,18 +379,20 @@ class SDLParser(GraphQLListener.GraphQLListener):
         self.codegen.write_variable(var)
 
     def __call__(self):
-        self.codegen.import_package(package=graphene, mode=2, object='*')
-        input_stream = FileStream(self.input_file)
-        lexer = GraphQLLexer.GraphQLLexer(input_stream)
-        stream = CommonTokenStream(lexer)
-        parser = GraphQLParser(stream)
-        tree = parser.document()
-        walker = ParseTreeWalker()
-        walker.walk(self, tree)
-        # print(tree.toStringTree(recog=parser))
+        try:
+            self.codegen.import_package(package=graphene, mode=2, object='*')
+            input_stream = FileStream(self.input_file)
+            lexer = GraphQLLexer.GraphQLLexer(input_stream)
+            stream = CommonTokenStream(lexer)
+            parser = GraphQLParser(stream)
+            tree = parser.document()
+            walker = ParseTreeWalker()
+            walker.walk(self, tree)
+        except Exception as err:
+            raise ParsingError(str(err))
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    parser = SDLParser('test.graphql', 'test.py')
-    parser()
+
+# TODO: Fix issue with parser reading type in fields
+# TODO: Write documentation
+# TODO: Publish app
