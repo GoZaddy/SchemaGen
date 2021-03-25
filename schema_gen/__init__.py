@@ -44,6 +44,9 @@ class SDLParser(GraphQLListener.GraphQLListener):
             # type definition is for an Object Type Definition
             if isinstance(child, GraphQLParser.ObjectTypeDefinitionContext) or isinstance(child,
                                                                                           GraphQLParser.InterfaceTypeDefinitionContext):
+                # print(child.name().getText())
+                # if ":" in child.name().getText():
+                #     child.exitRule(self)
                 is_object_type = isinstance(child, GraphQLParser.ObjectTypeDefinitionContext)
                 is_interface = isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext)
 

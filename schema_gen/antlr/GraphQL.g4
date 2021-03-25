@@ -256,7 +256,7 @@ typeSystemDirectiveLocation:
 name: NAME;
 
 //Start lexer
-NAME: [_A-Za-z] [_0-9A-Za-z]*;
+NAME: [_A-Za-z][_0-9A-Za-z]* ;
 
 fragment CHARACTER: ( ESC | ~ ["\\]);
 STRING: '"' CHARACTER* '"';

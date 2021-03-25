@@ -49,6 +49,35 @@ SchemaGen is currently in its first version so there are some things you need to
         avatar_url: Url
     }
   ```
+
+* Using a GraphQL SDL keyword as an object field name in your schema will throw an error.
+
+  For example, doing this:
+  ```graphql
+  enum UserType {
+    Example
+  }
+  
+  type User{
+    name: String
+    type: UserType
+  }
+  ```
+  will throw an error.
+  
+  Do this instead:
+  ```graphql
+  enum UserType {
+    Example
+  }
+  
+  type User{
+    name: String
+    user_type: UserType
+  }
+  ```
+  
+We plan to fix these issues in the future. Pull requests are welcome!
   
 
 
