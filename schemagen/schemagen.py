@@ -1,11 +1,11 @@
 from antlr4 import *
-from schemagen.antlr import GraphQLLexer, GraphQLListener, GraphQLParser
-from schemagen.codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
+from .antlr import GraphQLLexer, GraphQLListener, GraphQLParser
+from .codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
 import re
 from math import floor
 from datetime import datetime
-from schemagen.utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
-from schemagen.errors import ParsingError
+from .utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
+from .errors import ParsingError
 
 GraphQLParser = GraphQLParser.GraphQLParser
 
@@ -52,9 +52,6 @@ class SchemaGen(GraphQLListener.GraphQLListener):
             # type definition is for an Object Type Definition
             if isinstance(child, GraphQLParser.ObjectTypeDefinitionContext) or isinstance(child,
                                                                                           GraphQLParser.InterfaceTypeDefinitionContext):
-                # print(child.name().getText())
-                # if ":" in child.name().getText():
-                #     child.exitRule(self)
                 is_object_type = isinstance(child, GraphQLParser.ObjectTypeDefinitionContext)
                 is_interface = isinstance(child, GraphQLParser.InterfaceTypeDefinitionContext)
 
@@ -262,27 +259,28 @@ class SchemaGen(GraphQLListener.GraphQLListener):
                     # add enums as class variables to main class
                     enum_class.add_class_variable(enum_value, String(enum_value))
 
-                # add enums description
-                method = Method(
-                    name='description',
-                    decorators=['@property'],
-                    arguments=[]
-                )
+                if fields_and_desc:
+                    # add enums description
+                    method = Method(
+                        name='description',
+                        decorators=['@property'],
+                        arguments=[]
+                    )
 
-                if_else = IfElse(
-                    indent_level=method.get_indent_level() + 1,
-                    else_action=[Expr("pass")],
-                )
+                    if_else = IfElse(
+                        indent_level=method.get_indent_level() + 1,
+                        else_action=[Expr("pass")],
+                    )
 
-                for i in fields_and_desc:
-                    if_else.add_elif(If(
-                        expr=Expr(f"self == {enum_class.name}.{i}"),
-                        action=[Expr(f"return {fields_and_desc[i]}")]
-                    ))
+                    for i in fields_and_desc:
+                        if_else.add_elif(If(
+                            expr=Expr(f"self == {enum_class.name}.{i}"),
+                            action=[Expr(f"return {fields_and_desc[i]}")]
+                        ))
 
-                method.set_body([if_else])
+                    method.set_body([if_else])
 
-                enum_class.add_method(method=method)
+                    enum_class.add_method(method=method)
 
                 if len(meta_class.class_variables) != 0:
                     enum_class.add_sub_class(meta_class)

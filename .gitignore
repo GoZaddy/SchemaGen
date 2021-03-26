@@ -5,3 +5,6 @@ test.graphql
 schemagen/**/__pycache__/
 schemagen/**/**/__pycache__/
 .DS_store
+schemagen.egg-info
+build
+dist

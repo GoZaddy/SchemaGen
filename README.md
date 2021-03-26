@@ -56,7 +56,19 @@ class User(ObjectType):
 ```
 
 # Notes
-SchemaGen is currently in its first version so there are some things you need to know:
+Here are some things you should know about using SchemaGen:
+* SchemaGen is not guaranteed to catch errors in your GraphQL schema file.
+  
+  SchemaGen will only catch a very small percentage of errors that might occur in defining a GraphQL schema.
+  It is the developer's responsibility to ensure the GraphQL schema file is error-free.
+  
+  
+* SchemaGen will not install the graphene package on your local machine however it will import it in the generated python file.
+  
+  You can easily install the package by running:
+  ```shell
+  pip install graphene
+  ```
 * GraphQL type declarations in your schema file **must be ordered**. 
   
   Because of the way Python and SchemaGen works, you cannot use a GraphQL type
@@ -108,7 +120,7 @@ SchemaGen is currently in its first version so there are some things you need to
   }
   ```
   
-We plan to fix these issues in the future. Pull requests are welcome!
+I plan to fix the last two issues stated above in the future. Pull requests are welcome!
   
 
 
