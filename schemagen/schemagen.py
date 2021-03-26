@@ -1,11 +1,11 @@
 from antlr4 import *
-from schema_gen.antlr import GraphQLLexer, GraphQLListener, GraphQLParser
-from schema_gen.codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
+from schemagen.antlr import GraphQLLexer, GraphQLListener, GraphQLParser
+from schemagen.codegen import CodegenTool, Class, String, ClassInstance, IfElse, If, Method, Expr, Variable
 import re
 from math import floor
 from datetime import datetime
-from schema_gen.utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
-from schema_gen.errors import ParsingError
+from schemagen.utils import strip_string_quotes, camel_case_to_snake_case, process_input_value_definition
+from schemagen.errors import ParsingError
 
 GraphQLParser = GraphQLParser.GraphQLParser
 
@@ -25,8 +25,16 @@ built_in_scalars = [
 ]
 
 
-class SDLParser(GraphQLListener.GraphQLListener):
-    def __init__(self, input_file, output_file=None):
+class SchemaGen(GraphQLListener.GraphQLListener):
+    """
+    SchemaGen is the entry point through which the package is used.
+
+    Attributes:
+        input_file: a string containing the name of the GraphQL schema file
+        output_file: an optional string containing the name of the file to which the result of the code generation should be written to.
+    """
+
+    def __init__(self, input_file: str, output_file: str = None):
         if output_file is None:
             output_file = input_file.split(sep='.')[0] + '_' + str(floor(datetime.now().timestamp())) + '.py'
 
@@ -393,9 +401,3 @@ class SDLParser(GraphQLListener.GraphQLListener):
             walker.walk(self, tree)
         except Exception as err:
             raise ParsingError(str(err))
-
-
-
-# TODO: Fix issue with parser reading type in fields
-# TODO: Write documentation
-# TODO: Publish app

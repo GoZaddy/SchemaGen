@@ -3,8 +3,8 @@ from math import floor
 import autopep8
 import re
 from typing import List
-from schema_gen.utils import stringify, triple_stringify
-from schema_gen.errors import CodegenError
+from schemagen.utils import stringify, triple_stringify
+from schemagen.errors import CodegenError
 
 
 class Block:
@@ -52,6 +52,16 @@ class Expr(Block):
 
 
 class Function(Block):
+    """
+    Function represents a python function
+
+    Attributes:
+        name: name of function
+        arguments: arguments the function takes
+        body: function body
+        indent_level: indent level of the function
+        decorators: list of decorators of the function
+    """
     def __init__(self, name: str, arguments: list[str], body: List[Block] = None, indent_level=0,
                  decorators: List[str] = None):
         """
@@ -93,17 +103,40 @@ class Function(Block):
             return f"{decorators}\n{tabs}def {self.name}({args}):{body_lines}"
 
     def add_decorator(self, decorator: str):
+        """
+        This adds a decorator to the Function object
+        Args:
+            decorator: a string containing the decorator, should begin with '@'
+
+        """
         if decorator[0] != '@':
             raise CodegenError('Invalid decorator value. Decorator should start with @')
         else:
             self.decorators.append(decorator)
 
     def set_body(self, body: List[Block]):
+        """
+        This sets the function body
+        Args:
+            body: a list of Block objects that represent the new Function body
+
+        """
         self.body = body
 
 
-# TODO: make sure everything works well after sha
 class Method(Function):
+    """
+    This presents a python method
+
+    Attributes:
+        name: name of method
+        arguments: arguments the method takes
+        body: function body
+        indent_level: indent level of the method
+        decorators: list of decorators of the method
+        is_static: this should be True when the method is a static method
+
+    """
     def __init__(self, name: str, arguments: list[str], indent_level=1, decorators: List[str] = None,
                  body: List[Block] = None, is_static: bool = False):
         if not is_static:
@@ -112,6 +145,16 @@ class Method(Function):
 
 
 class Class(Block):
+    """
+    This represents a python class
+
+    Attributes:
+        name: name of the class
+        base_class: name of the class that this class inherits from(if any)
+        add_init_method: this should be true if you want the class to have an init method
+        indent_level: indent level of class
+        description: description of the class
+    """
     def __init__(self, name: str, base_class: str = None, add_init_method: bool = False, indent_level=0,
                  description: str = None):
         self.name = name[0].upper()+name[1:]
@@ -192,6 +235,13 @@ class Class(Block):
 
 
 class Variable:
+    """
+    This represents a python variable
+
+    Attributes:
+        name: name of the variable
+        value: value of the variable
+    """
     def __init__(self, name, value):
         self.name = name
         self.value = value
@@ -213,7 +263,15 @@ class Variable:
 
 
 class ClassInstance:
-    def __init__(self, class_name, *args, **kwargs):
+    """
+    This presents the creation of a class instance in python
+
+    Attributes:
+        class_name: the name of the class
+        *args: the args passed to the class' init method
+        **kwargs: the kwargs passed to the class' init method
+    """
+    def __init__(self, class_name: str, *args, **kwargs):
         """
         Create a ClassInstance object
         Args:
@@ -249,6 +307,16 @@ class ClassInstance:
 
 
 class If(Block):
+    """
+    This represents an If/ Elif block in python
+
+    Attributes:
+        expr: the expression of the if/elif block
+        action: the body of the if/elif block
+        if_type: if/elif
+        indent_level: the indent level of the If/Elif Block
+    """
+
     def __init__(self, expr: Expr, action: List[Expr], if_type: str = 'if', indent_level=0):
         self.expr = expr
         self.action = action
@@ -267,6 +335,15 @@ class If(Block):
 
 
 class IfElse(Block):
+    """
+    This represents an if-else block in python. Elif blocks can also be added to it
+
+    Attributes:
+        else_action: body of the else block
+        indent_level: indent level of the Block
+        elifs: the elif blocks attached to the if-else block
+        if_: the 'if' part of the if-else block
+    """
     def __init__(self, else_action: List[Expr], indent_level=0, elifs: List[If] = None, if_: If = None):
         if elifs is None:
             elifs = []
@@ -323,6 +400,10 @@ class IfElse(Block):
 class CodegenTool:
     """
     This is a little internal tool for programmatic writing of python code
+
+    Attributes:
+        output_file: an optional python file that the output code will be written to
+        override: this should be True if you want to override the content of the output_file(if set)
     """
 
     def __init__(self, output_file: str = None, override: bool = True):
@@ -373,49 +454,46 @@ class CodegenTool:
             self.format_file()
 
     def write_class(self, _class: Class):
+        """
+        This writes a class to the output file
+        Args:
+            _class: the class to be written
+
+        Returns:
+
+        """
         with open(self.output_file, 'a+') as f:
             f.write(str(_class))
             self.format_file()
 
     def write_variable(self, variable: Variable):
+        """
+        This writes a variable to the output file
+        Args:
+            variable: the variable to be written
+
+        Returns:
+
+        """
         with open(self.output_file, 'a+') as f:
             f.write(str(variable))
             self.format_file()
 
     def write_if_else(self, if_else: IfElse):
+        """
+        This writes an if-else block to the output file
+        Args:
+            if_else: the if-else block to be written
+
+        Returns:
+
+        """
         with open(self.output_file, 'a+') as f:
             f.write(str(if_else))
             self.format_file()
 
     def format_file(self):
+        """
+        This formats the output file
+        """
         autopep8.fix_file(self.output_file)
-
-
-if __name__ == '__main__':
-    # c = Class(name='NewException', base_class='Exception', add_init_method=True)
-    # c.add_method(method_name='get_message', arguments_names=[])
-    # c.add_method(method_name='another_method', arguments_names=['message'])
-    # c.add_class_variable('hey', 2)
-    # codegen.import_package(mode=2, package='datetime', object='datetime')
-    # codegen.write_class(c)
-    # a = ClassInstance('name', String('arg1'), String('arg2'), kwarg1='kwarg10', required='True')
-    codegen = CodegenTool('test.py')
-    # ie = IfElse(
-    #     if_=If(
-    #         expr=Expr(f"{String('a')} != {String('b')}"),
-    #         action=[Expr("print('true')"), Expr("print('true')"), Expr("print('true')")]
-    #     ),
-    #     else_action=[Expr("print('else')")],
-    # )
-    #
-    # ie.add_elif(
-    #     If(
-    #         expr=Expr(f"{String('a')} == {String('b')}"),
-    #         action=[Expr("print('false')"), Expr("print('false')"), Expr("print('false')")],
-    #         if_type='elif'
-    #     )
-    # )
-
-    cls = Class(name='randomshii', description='hEY BABE')
-
-    codegen.write_if_else(cls)

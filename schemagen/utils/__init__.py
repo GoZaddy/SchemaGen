@@ -58,7 +58,7 @@ def process_input_value_definition(ivd) -> dict:
 
     """
 
-    from schema_gen import codegen
+    from schemagen import codegen
     ClassInstance = codegen.ClassInstance
 
     arg_type = ivd.type_().getText()

@@ -2,6 +2,6 @@ env/
 test.graphql
 **/.idea/workspace.xml
 **/.idea/tasks.xml
-./schema_gen/**/__pycache__/
-./schema_gen/**/**/__pycache__/
+schemagen/**/__pycache__/
+schemagen/**/**/__pycache__/
 .DS_store
